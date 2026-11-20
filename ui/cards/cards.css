@@ -1,0 +1,144 @@
+.vt-board {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  padding: 0.2em 0.1em;
+  font-size: clamp(0.85rem, 6.5cqmin, 1.6rem);
+  overflow: hidden;
+  /* A row that does not fit whole wraps into a second column, out of sight, rather than showing cut. */
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.vt-board > * {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.vt-stop {
+  font-size: 0.75em;
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-row {
+  display: grid;
+  grid-template-columns: minmax(2.6em, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55em;
+  line-height: 1.25;
+}
+
+.vt-badge {
+  justify-self: start;
+  min-width: 2.2em;
+  padding: 0.05em 0.35em;
+  border: 2px solid;
+  border-radius: 0.3em;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.vt-direction {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vt-platform {
+  margin-left: 0.4em;
+  font-size: 0.75em;
+  color: var(--mantine-color-dimmed);
+}
+
+.vt-time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.vt-planned {
+  margin-right: 0.35em;
+  font-size: 0.75em;
+  font-weight: 400;
+  color: var(--mantine-color-dimmed);
+  text-decoration: line-through;
+}
+
+.vt-cancelled .vt-direction,
+.vt-cancelled .vt-time {
+  text-decoration: line-through;
+  color: var(--mantine-color-red-5);
+}
+
+.vt-quiet {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.5em;
+  text-align: center;
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.vt-mark {
+  display: inline-flex;
+  vertical-align: -0.1em;
+  margin: 0 0.3em;
+  color: var(--mantine-color-orange-5);
+}
+
+.vt-direction .vt-mark {
+  margin-left: 0;
+}
+
+.vt-disruptions {
+  font-size: clamp(0.8rem, 5cqmin, 1.3rem);
+  gap: 0.6em;
+}
+
+.vt-disruption {
+  padding-left: 0.5em;
+  border-left: 3px solid var(--mantine-color-orange-5);
+  line-height: 1.3;
+}
+
+.vt-disruption.vt-slight {
+  border-left-color: var(--mantine-color-yellow-5);
+}
+
+.vt-disruption.vt-severe {
+  border-left-color: var(--mantine-color-red-6);
+}
+
+.vt-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  margin-bottom: 0.2em;
+  font-size: 0.8em;
+}
+
+.vt-description {
+  margin-top: 0.15em;
+  font-size: 0.8em;
+  color: var(--mantine-color-dimmed);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vt-span {
+  margin-top: 0.1em;
+  font-size: 0.75em;
+  color: var(--mantine-color-dimmed);
+}

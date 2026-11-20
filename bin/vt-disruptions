@@ -1,0 +1,67 @@
+#!ts
+/** vt-disruptions — Västtrafik's disruptions at stops or on lines: moved platforms, diversions, lines not running. */
+import type { CmdReturn, Command } from '@ein/client';
+import { collectUnknownFlags, parseArgs, reportUnknownFlags } from '@ein/client';
+import type { VtDisruption, VtDisruptions } from '@vasttrafik/api';
+import { disruptions, fail } from '@vasttrafik/client';
+
+const AHEAD_MAX = 168;
+
+/** `2026-11-30T23:59:00+01:00` as `2026-11-30 23:59`, the clock where it happens. */
+const when = (iso: string): string => `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+
+/** One disruption for a terminal: how bad, from when to when, its lines, its title, and what it says further. */
+const text = (one: VtDisruption): string[] => [
+  `${one.severity.padEnd(7)} ${when(one.start)} – ${one.end ? when(one.end) : 'until further notice'}${
+    one.lines.length ? `  lines ${one.lines.map((line) => line.designation).join(' ')}` : ''
+  }`,
+  `  ${one.title}`,
+  ...(one.description ? [`  ${one.description}`] : []),
+];
+
+const vtDisruptions = async (cmd: Command): CmdReturn => {
+  const unknown: string[] = [];
+  const flags = parseArgs(cmd.args, { string: ['ahead'], collect: ['stop', 'line'], unknown: collectUnknownFlags(unknown) });
+  if (await reportUnknownFlags(cmd, unknown)) return 1;
+  const split = (values: unknown) => ([] as unknown[]).concat(values ?? []).map(String).flatMap((value) => value.split(',')).filter(Boolean);
+  const stops = split(flags.stop);
+  const lines = split(flags.line);
+  const ahead = flags.ahead === undefined ? 0 : Number(flags.ahead);
+  const notStop = stops.find((gid) => !/^\d{16}$/.test(gid));
+  if (notStop || !(ahead >= 0 && ahead <= AHEAD_MAX)) {
+    await cmd.writeError(
+      notStop ? `vt-disruptions: ${notStop}: not a stop area's gid, 16 digits; vt-stops lists them\n` : `vt-disruptions: --ahead takes hours from 0 to ${AHEAD_MAX}\n`,
+    );
+    return 2;
+  }
+  try {
+    const answer = await disruptions(cmd, { stops, lines, aheadHours: ahead });
+    if (cmd.json) await cmd.writeJSON(answer satisfies VtDisruptions);
+    else for (const one of answer.disruptions) for (const line of text(one)) await cmd.writeLn(line);
+    return 0;
+  } catch (error) {
+    return await fail(cmd, 'vt-disruptions', error);
+  }
+};
+
+vtDisruptions.spec = {
+  name: 'vt-disruptions',
+  effect: 'read' as const,
+  description:
+    "List Västtrafik's disruptions in effect at stops or on lines — moved platforms, diversions, lines not running — the worst first, from a copy refreshed at most every five minutes",
+  args: [],
+  flags: [
+    { name: 'stop', type: 'string' as const, description: 'those naming this stop area, by gid as vt-stops lists it; repeat it or put commas between for several' },
+    {
+      name: 'line',
+      type: 'string' as const,
+      description: 'those naming this line: by what its signs say (6), which takes every line of that name in the region, or by its gid; repeat it for several',
+    },
+    { name: 'ahead', type: 'number' as const, description: `also those starting within so many hours, 0 to ${AHEAD_MAX}; 0 unless given` },
+  ],
+  examples: ['vt-disruptions --stop 9021014001760000', 'vt-disruptions --line 6 --ahead 24', 'vt-disruptions'],
+  returns:
+    'at, and disruptions that name any of the stops or lines given (every one when none is), the worst first: id, title, description, severity (slight, normal, severe), start, end, stops (gid, name) and lines (gid, designation, name, background, foreground, mode).',
+};
+
+export default vtDisruptions;

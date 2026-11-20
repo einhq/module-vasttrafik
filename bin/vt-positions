@@ -1,0 +1,37 @@
+#!ts
+/** vt-positions — where Västtrafik's vehicles are now, around stops or in a box. */
+import type { CmdReturn, Command } from '@ein/client';
+import type { VtPositions } from '@vasttrafik/api';
+import { AREA_FLAGS, areaOf, fail, positions } from '@vasttrafik/client';
+
+const vtPositions = async (cmd: Command): CmdReturn => {
+  try {
+    const area = await areaOf(cmd, 'vt-positions');
+    if (typeof area === 'number') return area;
+    const answer = { ...await positions(cmd, area.box, area.lines), stops: area.stops, ...(area.around ? { around: area.around } : {}) };
+    if (cmd.json) await cmd.writeJSON(answer satisfies VtPositions);
+    else {for (const vehicle of answer.vehicles) {
+        await cmd.writeLn(`${vehicle.line.designation.padEnd(5)} ${vehicle.lat.toFixed(5)} ${vehicle.lng.toFixed(5)}  ${vehicle.direction}`);
+      }}
+    return 0;
+  } catch (error) {
+    return await fail(cmd, 'vt-positions', error);
+  }
+};
+
+vtPositions.spec = {
+  name: 'vt-positions',
+  effect: 'read' as const,
+  description: "Show where Västtrafik's vehicles are now, around stops or in a box, refreshed at most every 5 seconds",
+  args: [],
+  flags: AREA_FLAGS,
+  examples: [
+    'vt-positions --around 9021014001760000',
+    'vt-positions --bbox 57.70,11.95,57.72,11.99 --line 6',
+    'vt-positions --around 9021014001760000 --margin 500 --bbox=57.69,11.94,57.72,11.99',
+  ],
+  returns:
+    'box (south, west, north, east), stops (as vt-stops), around (the box of --around and --margin, when given), at, freshMs (the milliseconds before Västtrafik is asked anew), and vehicles, each with ref, line (designation, name, background, foreground, border, mode), direction, lat, lng and trail (where it was over the last ten minutes, oldest first, a point every half minute, as [lat, lng, seconds before at]).',
+};
+
+export default vtPositions;

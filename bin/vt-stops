@@ -1,0 +1,39 @@
+#!ts
+/** vt-stops — Västtrafik's stop areas, from a copy kept for a day. */
+import type { CmdReturn, Command } from '@ein/client';
+import { collectUnknownFlags, parseArgs, reportUnknownFlags } from '@ein/client';
+import type { VtStop } from '@vasttrafik/api';
+import { fail, stops } from '@vasttrafik/client';
+
+/** Lower case without accents, so `goteborg` finds Göteborg. */
+const fold = (text: string): string => text.toLocaleLowerCase('sv').normalize('NFD').replace(/\p{M}/gu, '');
+
+const vtStops = async (cmd: Command): CmdReturn => {
+  const unknown: string[] = [];
+  const flags = parseArgs(cmd.args, { string: ['municipality'], unknown: collectUnknownFlags(unknown) });
+  if (await reportUnknownFlags(cmd, unknown)) return 1;
+  try {
+    const words = flags._.map((word) => fold(String(word)));
+    const municipality = flags.municipality ? fold(flags.municipality) : undefined;
+    const list = (await stops(cmd)).filter((stop) =>
+      (!municipality || fold(stop.municipality ?? '') === municipality) && words.every((word) => fold(stop.label).includes(word))
+    );
+    if (cmd.json) await cmd.writeJSON(list satisfies VtStop[]);
+    else for (const stop of list) await cmd.writeLn(`${stop.gid}  ${stop.label}`);
+    return 0;
+  } catch (error) {
+    return await fail(cmd, 'vt-stops', error);
+  }
+};
+
+vtStops.spec = {
+  name: 'vt-stops',
+  effect: 'read' as const,
+  description: "List Västtrafik's stop areas, every one or those whose name has the words given, from a copy refreshed each day",
+  args: [{ name: 'words', type: 'string' as const, description: 'words the stop and its municipality must have, in any case and with or without accents' }],
+  flags: [{ name: 'municipality', type: 'string' as const, description: 'only the stops in this municipality, such as Göteborg' }],
+  examples: ['vt-stops brunnsparken', 'vt-stops --municipality Kungälv'],
+  returns: 'One entry per stop area, by name: gid, name, municipality, label (the name and its municipality), lat and lng.',
+};
+
+export default vtStops;

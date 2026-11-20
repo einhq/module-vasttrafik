@@ -1,0 +1,37 @@
+#!ts
+/** vt-tracks — where the lines of Västtrafik's vehicles in a box run, as their journeys do. */
+import type { CmdReturn, Command } from '@ein/client';
+import type { VtTracks } from '@vasttrafik/api';
+import { AREA_FLAGS, areaOf, fail, tracks } from '@vasttrafik/client';
+
+const vtTracks = async (cmd: Command): CmdReturn => {
+  try {
+    const area = await areaOf(cmd, 'vt-tracks');
+    if (typeof area === 'number') return area;
+    const answer = await tracks(cmd, area.box, area.lines);
+    if (cmd.json) await cmd.writeJSON(answer satisfies VtTracks);
+    else {
+      for (const track of answer.tracks) {
+        const points = track.paths.reduce((sum, path) => sum + path.length, 0);
+        await cmd.writeLn(`${track.line.designation.padEnd(5)} ${track.direction}  ${points} points`);
+      }
+    }
+    return 0;
+  } catch (error) {
+    return await fail(cmd, 'vt-tracks', error);
+  }
+};
+
+vtTracks.spec = {
+  name: 'vt-tracks',
+  effect: 'read' as const,
+  description:
+    'Show where the lines through a box, around stops or given, run, each line and direction as one of its journeys runs, clipped to the box: the lines with a vehicle in it now, and those whose path crosses it with a vehicle seen within the day; each path kept a day',
+  args: [],
+  flags: AREA_FLAGS,
+  examples: ['vt-tracks --around 9021014001760000', 'vt-tracks --bbox 57.70,11.95,57.72,11.99 --line 6'],
+  returns:
+    'box (south, west, north, east), at, and tracks, one for each line and direction through the box: line (as vt-positions), direction, and paths, each stretch of the path that crosses the box, as [lat, lng] pairs.',
+};
+
+export default vtTracks;

@@ -1,0 +1,110 @@
+[
+  {
+    "name": "departures",
+    "label": "Departures",
+    "description": "The next trams, buses and boats from one stop, with how many minutes until each leaves as Västtrafik now expects it.",
+    "icon": "bus-stop",
+    "color": "blue",
+    "route": "/cards/vasttrafik/departures",
+    "size": [4, 4],
+    "min": [2, 2],
+    "params": {
+      "type": "object",
+      "required": ["stop"],
+      "properties": {
+        "stop": { "type": "string", "title": "Stop", "x-choices": { "command": "vt-stops", "value": "gid", "label": "label" } },
+        "lines": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Lines",
+          "description": "Only these; every line when none is chosen.",
+          "x-choices": { "command": "vt-lines {stop}", "items": "lines", "value": "designation", "label": "name" }
+        },
+        "platforms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Platforms",
+          "description": "Only from these; every platform when none is chosen.",
+          "x-choices": { "command": "vt-lines {stop}", "items": "platforms", "value": "platform", "label": "platform" }
+        },
+        "limit": { "type": "integer", "title": "At most", "default": 6, "minimum": 1, "maximum": 20 },
+        "time": {
+          "type": "string",
+          "title": "Show",
+          "default": "minutes",
+          "oneOf": [{ "const": "minutes", "title": "Minutes until it leaves" }, { "const": "clock", "title": "The time it leaves" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "map",
+    "label": "Vehicles on the map",
+    "description": "The trams, buses and boats around one or more stops, where they are now, on their lines' tracks.",
+    "icon": "map-2",
+    "color": "blue",
+    "route": "/cards/vasttrafik/map",
+    "frame": "plain",
+    "size": [6, 5],
+    "min": [3, 3],
+    "params": {
+      "type": "object",
+      "required": ["stops"],
+      "properties": {
+        "stops": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Stops",
+          "x-choices": { "command": "vt-stops", "value": "gid", "label": "label" }
+        },
+        "lines": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Lines",
+          "description": "Only these; every line when none is chosen.",
+          "x-choices": { "command": "vt-lines {stops}", "items": "lines", "value": "designation", "label": "name" }
+        },
+        "margin": {
+          "type": "integer",
+          "title": "Metres around the stops",
+          "description": "How much of the map the card shows; the vehicles and tracks are those of the whole card.",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 5000
+        },
+        "tracks": { "type": "boolean", "title": "The lines' tracks", "description": "Where each line runs, under its vehicles.", "default": true }
+      }
+    }
+  },
+  {
+    "name": "disruptions",
+    "label": "Disruptions",
+    "description": "What Västtrafik says disrupts some stops or lines now: moved platforms, diversions, lines not running.",
+    "icon": "alert-triangle",
+    "color": "orange",
+    "route": "/cards/vasttrafik/disruptions",
+    "size": [4, 4],
+    "min": [2, 2],
+    "params": {
+      "type": "object",
+      "required": ["stops"],
+      "properties": {
+        "stops": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Stops",
+          "x-choices": { "command": "vt-stops", "value": "gid", "label": "label" }
+        },
+        "lines": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Lines",
+          "description": "Also these lines' disruptions anywhere along them, not only at the stops.",
+          "x-choices": { "command": "vt-lines {stops}", "items": "lines", "value": "gid", "label": "name" }
+        },
+        "ahead": { "type": "integer", "title": "Also those starting within (hours)", "default": 0, "minimum": 0, "maximum": 168 },
+        "details": { "type": "boolean", "title": "What Västtrafik says further", "default": true }
+      }
+    }
+  }
+]

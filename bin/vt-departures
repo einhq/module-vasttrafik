@@ -1,0 +1,63 @@
+#!ts
+/** vt-departures — the next departures from Västtrafik stops, as late as Västtrafik expects them. */
+import type { CmdReturn, Command } from '@ein/client';
+import { collectUnknownFlags, parseArgs, reportUnknownFlags } from '@ein/client';
+import type { VtDeparture, VtDepartures } from '@vasttrafik/api';
+import { departures, fail } from '@vasttrafik/client';
+
+const MAX = 20;
+
+/**
+ * One departure for a terminal: its time, line, direction, platform, and how late or that it is
+ * cancelled. The time is the clock at the stop, as Västtrafik writes it.
+ */
+const line = (departure: VtDeparture): string => {
+  const expected = departure.estimated ?? departure.planned;
+  const late = Math.round((Date.parse(expected) - Date.parse(departure.planned)) / 60_000);
+  const note = departure.cancelled ? '  cancelled' : departure.partCancelled ? '  partly cancelled' : late ? `  ${late > 0 ? '+' : ''}${late} min` : '';
+  return `${expected.slice(11, 16)}  ${departure.line.designation.padEnd(5)} ${departure.direction}${departure.platform ? `  (${departure.platform})` : ''}${note}`;
+};
+
+const vtDepartures = async (cmd: Command): CmdReturn => {
+  const unknown: string[] = [];
+  const flags = parseArgs(cmd.args, { string: ['limit'], collect: ['line', 'platform'], unknown: collectUnknownFlags(unknown) });
+  if (await reportUnknownFlags(cmd, unknown)) return 1;
+  const gids = flags._.map(String).flatMap((arg) => arg.split(',')).filter(Boolean);
+  const limit = flags.limit === undefined ? 8 : Number(flags.limit);
+  if (!gids.length || !Number.isInteger(limit) || limit < 1 || limit > MAX) {
+    await cmd.writeError(`vt-departures: name a stop area by its gid, and --limit from 1 to ${MAX}\n`);
+    return 2;
+  }
+  const split = (values: unknown) => ([] as unknown[]).concat(values ?? []).map(String).flatMap((value) => value.split(',')).filter(Boolean);
+  try {
+    const answer: VtDepartures[] = [];
+    for (const gid of gids) answer.push(await departures(cmd, gid, { limit, lines: split(flags.line), platforms: split(flags.platform) }));
+    if (cmd.json) await cmd.writeJSON(answer satisfies VtDepartures[]);
+    else {
+      for (const stop of answer) {
+        if (gids.length > 1) await cmd.writeLn(`${stop.stop.name}:`);
+        for (const departure of stop.departures) await cmd.writeLn(`${gids.length > 1 ? '  ' : ''}${line(departure)}`);
+      }
+    }
+    return 0;
+  } catch (error) {
+    return await fail(cmd, 'vt-departures', error);
+  }
+};
+
+vtDepartures.spec = {
+  name: 'vt-departures',
+  effect: 'read' as const,
+  description: 'Show the next departures from Västtrafik stops, at the time Västtrafik now expects each, refreshed at most every 20 seconds',
+  args: [{ name: 'stop', type: 'string' as const, description: 'stop areas by gid, as vt-stops lists them' }],
+  flags: [
+    { name: 'line', type: 'string' as const, description: 'only this line, by what its signs say (6, X5); repeat it or put commas between for several' },
+    { name: 'platform', type: 'string' as const, description: 'only from this platform (A, B1); A takes A1 and A2 too; repeat it for several' },
+    { name: 'limit', type: 'number' as const, description: `how many from each stop, 1 to ${MAX}; 8 unless given` },
+  ],
+  examples: ['vt-departures 9021014001760000', 'vt-departures 9021014001760000 --line 6 --line 11 --limit 4'],
+  returns:
+    'One entry per stop: stop (gid, name), at, freshMs (the milliseconds before Västtrafik is asked anew), and its departures by when they leave, each with line (designation, name, background, foreground, border, mode), direction, platform, planned, estimated, cancelled and partCancelled.',
+};
+
+export default vtDepartures;

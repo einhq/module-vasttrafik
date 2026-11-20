@@ -1,0 +1,36 @@
+#!ts
+/** vt-lines — the lines calling at Västtrafik stops, and the platforms they leave from. */
+import type { CmdReturn, Command } from '@ein/client';
+import type { VtLines } from '@vasttrafik/api';
+import { fail, lines } from '@vasttrafik/client';
+
+const vtLines = async (cmd: Command): CmdReturn => {
+  const gids = cmd.args.flatMap((arg) => arg.split(',')).map((gid) => gid.trim()).filter(Boolean);
+  if (!gids.length) {
+    await cmd.writeError('vt-lines: name a stop area by its gid; vt-stops lists them\n');
+    return 2;
+  }
+  try {
+    const answer = await lines(cmd, gids);
+    if (cmd.json) await cmd.writeJSON(answer satisfies VtLines);
+    else {
+      for (const line of answer.lines) await cmd.writeLn(`${line.designation.padEnd(5)} ${line.mode.padEnd(5)} ${line.directions.join(' · ')}`);
+      if (answer.platforms.length) await cmd.writeLn(`platforms: ${answer.platforms.map((each) => each.platform).join(' ')}`);
+    }
+    return 0;
+  } catch (error) {
+    return await fail(cmd, 'vt-lines', error);
+  }
+};
+
+vtLines.spec = {
+  name: 'vt-lines',
+  effect: 'read' as const,
+  description: 'List the lines that leave Västtrafik stops within twelve hours, with their directions, and the platforms they leave from',
+  args: [{ name: 'stop', type: 'string' as const, description: 'stop areas by gid, as vt-stops lists them; several, or one word with commas between' }],
+  flags: [],
+  examples: ['vt-lines 9021014001760000'],
+  returns: 'The stops, the lines (designation, name, background, foreground, border, mode, directions) by designation, and the platforms (platform).',
+};
+
+export default vtLines;
