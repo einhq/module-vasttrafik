@@ -3,10 +3,11 @@ import { usePolledCommand } from '@ein/ui/hooks';
 import { formatDate, formatTime, shq } from '@ein/ui/lib';
 import { useSearchParams } from 'react-router-dom';
 import type { VtDisruption, VtDisruptions } from '../../lib/api.ts';
+import { whenDue } from '../components/fresh.ts';
 import { Badge, Quiet } from '../components/parts.tsx';
 import './cards.css';
 
-/** Asked again this often; Västtrafik's disruptions are kept five minutes on the server. */
+/** Asked again as soon as the server's answer is due, which it says; this often when it has none. */
 const POLL_MS = 60_000;
 
 /** `until 30 Nov`, or `until 14:30` for one that ends today; `starts 22 Nov 07:00` for one that has not begun. */
@@ -24,7 +25,7 @@ const span = (one: VtDisruption, now: number): string => {
  * `/cards/vasttrafik/disruptions`: what Västtrafik says disrupts some stops (`stops`) or some
  * `lines` (by gid): each disruption's lines, its title, until when it lasts, and, when `details`
  * is on, what it says further. The worst first; `ahead` hours also takes those about to start.
- * Asked again every minute.
+ * Asked again as soon as the server's answer is due.
  */
 export default function DisruptionsCard() {
   const [params] = useSearchParams();
@@ -38,7 +39,7 @@ export default function DisruptionsCard() {
     ...(lines.length ? [`--line ${shq(lines.join(','))}`] : []),
     ...(ahead ? [`--ahead ${ahead}`] : []),
   ].join(' ');
-  const answer = usePolledCommand<VtDisruptions>(command, stops.length + lines.length > 0, POLL_MS);
+  const answer = usePolledCommand<VtDisruptions>(command, stops.length + lines.length > 0, POLL_MS, (answer) => whenDue(answer.freshMs));
 
   if (!answer.data) {
     if (!answer.error) return <Skeleton height='70%' radius='md' />;

@@ -1,0 +1,28 @@
+#!ts
+/** vt-status — whether Västtrafik takes the key, and answers each API the other commands use. */
+import type { CmdReturn, Command } from '@ein/client';
+import type { HealthCheck } from '@ein/api';
+import { status } from '@vasttrafik/client';
+
+const vtStatus = async (cmd: Command): CmdReturn => {
+  if (cmd.args.length) {
+    await cmd.writeError('vt-status: takes nothing\n');
+    return 2;
+  }
+  const checks = await status(cmd);
+  if (cmd.json) await cmd.writeJSON(checks satisfies HealthCheck[]);
+  else for (const check of checks) await cmd.writeLn(`${check.state.padEnd(4)} ${check.reason}`);
+  return 0;
+};
+
+vtStatus.spec = {
+  name: 'vt-status',
+  effect: 'read' as const,
+  description: 'Check that Västtrafik takes the key and that the application subscribes to each API the Västtrafik commands use, asking each anew',
+  args: [],
+  flags: [],
+  examples: ['vt-status'],
+  returns: 'One check for the key, then one for each API (Planera Resa v4, Geografi v3, Störning v1) once the key is taken: name, state (ok or fail) and reason.',
+};
+
+export default vtStatus;

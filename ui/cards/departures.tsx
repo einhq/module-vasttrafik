@@ -9,7 +9,7 @@ import { whenDue } from '../components/fresh.ts';
 import { Badge, Quiet } from '../components/parts.tsx';
 import './cards.css';
 
-/** Asked again as soon as the server's answer is this old, which it keeps as long; this often when it has none. */
+/** Asked again as soon as the server's answer is due, which it says; this often when it has none. */
 const POLL_MS = 20_000;
 
 /** The time now, ticking every few seconds so the minutes count down between answers. */
@@ -38,7 +38,7 @@ const When = ({ departure, now, clock }: { departure: VtDeparture; now: number; 
   return <span className='vt-time'>{minutes <= 0 ? 'now' : `${minutes} min`}</span>;
 };
 
-/** Disruptions are asked for this often; Västtrafik's are kept five minutes on the server. */
+/** Disruptions are asked for again as soon as the server's answer is due; this often when it has none. */
 const DISRUPTIONS_POLL_MS = 60_000;
 
 /** A disruption's mark: a warning, its titles on hover. */
@@ -53,8 +53,8 @@ const Mark = ({ about }: { about: VtDisruption[] }) => (
  * `platforms` when given, at most `limit`, each with its line's badge, where it goes, its platform,
  * and the minutes until it leaves as Västtrafik now expects it, or the time when `time` is `clock`.
  * A cancelled one is struck out, and a line that Västtrafik says is disrupted, or the stop, has a
- * warning mark. Asked again as soon as the server's answer is 20 seconds old; the minutes count down
- * between.
+ * warning mark. Asked again as soon as the server's answer is due, as old as Västtrafik's settings
+ * say; the minutes count down between.
  */
 export default function DeparturesCard() {
   const [params] = useSearchParams();
@@ -75,6 +75,7 @@ export default function DeparturesCard() {
     `vt-disruptions --stop ${shq(stop)}${lineGids.length ? ` --line ${shq(lineGids.join(','))}` : ''}`,
     board !== undefined,
     DISRUPTIONS_POLL_MS,
+    (answer) => whenDue(answer.freshMs),
   ).data?.disruptions ?? [];
   const onLine = (departure: VtDeparture) => disrupted.filter((one) => one.lines.some((line) => line.gid === departure.line.gid));
   const atStop = disrupted.filter((one) => one.lines.length === 0);

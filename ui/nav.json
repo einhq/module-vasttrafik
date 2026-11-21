@@ -1,0 +1,14 @@
+{
+  "panels": [
+    {
+      "id": "vasttrafik.settings",
+      "slot": "settings.views",
+      "label": "Västtrafik",
+      "description": "The key to Västtrafik's open API, and how often it is asked for departures, vehicles and disruptions.",
+      "icon": "bus",
+      "route": "/settings/vasttrafik",
+      "admin": true,
+      "order": 60
+    }
+  ]
+}

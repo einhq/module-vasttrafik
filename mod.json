@@ -1,9 +1,9 @@
 {
   "name": "vasttrafik",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Västtrafik: when the next tram or bus leaves a stop, where the vehicles are now, and what disrupts them, as dashboard cards and commands",
   "license": "MIT",
-  "coreApi": "^0.15.42",
+  "coreApi": "^0.15.44",
   "exports": {
     "./api": "./lib/api.ts"
   },
@@ -15,7 +15,8 @@
     "routes": {
       "/cards/vasttrafik/departures": "ui/cards/departures.tsx",
       "/cards/vasttrafik/map": "ui/cards/map.tsx",
-      "/cards/vasttrafik/disruptions": "ui/cards/disruptions.tsx"
+      "/cards/vasttrafik/disruptions": "ui/cards/disruptions.tsx",
+      "/settings/vasttrafik": "ui/pages/settings.tsx"
     }
   },
   "config": {
@@ -26,7 +27,7 @@
         "type": "secret",
         "default": "",
         "label": "Västtrafik key",
-        "description": "The authentication key of an application of yours at developer.vasttrafik.se that subscribes to Planera Resa v4, Geografi v3 and Störning v1. Without it the Västtrafik cards and commands have nothing to show.",
+        "description": "The authentication key of an application of yours at developer.vasttrafik.se that subscribes to Planera Resa v4, Geografi v3 and Störning v1. Without it the Västtrafik cards and commands have nothing to show. Set it under Settings → System → Västtrafik, which checks it.",
         "group": "Västtrafik"
       },
       {
@@ -36,6 +37,33 @@
         "default": "https://ext-api.vasttrafik.se",
         "label": "Västtrafik's address",
         "description": "Where Västtrafik's open API answers. The key is sent only here.",
+        "group": "Västtrafik"
+      },
+      {
+        "key": "CFG_VASTTRAFIK_DEPARTURES_SECONDS",
+        "scope": "system",
+        "type": "number",
+        "default": "20",
+        "label": "Departures kept (seconds)",
+        "description": "How long EiN keeps a stop's departures before it asks Västtrafik again, 10 to 600. Each stop on a screen costs one call to Västtrafik this often, however many screens show it; the departures cards ask again as soon as it is due.",
+        "group": "Västtrafik"
+      },
+      {
+        "key": "CFG_VASTTRAFIK_POSITIONS_SECONDS",
+        "scope": "system",
+        "type": "number",
+        "default": "5",
+        "label": "Vehicles kept (seconds)",
+        "description": "How long EiN keeps where the vehicles in a map card's box are before it asks Västtrafik again, 2 to 300. Vehicles report where they are every two or three seconds; each map on a screen costs one call this often, and its vehicles drive smoothly between answers.",
+        "group": "Västtrafik"
+      },
+      {
+        "key": "CFG_VASTTRAFIK_DISRUPTIONS_SECONDS",
+        "scope": "system",
+        "type": "number",
+        "default": "300",
+        "label": "Disruptions kept (seconds)",
+        "description": "How long EiN keeps the region's disruptions before it asks Västtrafik again, 60 to 3600. One call covers every card.",
         "group": "Västtrafik"
       }
     ]

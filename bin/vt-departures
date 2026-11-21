@@ -48,7 +48,8 @@ const vtDepartures = async (cmd: Command): CmdReturn => {
 vtDepartures.spec = {
   name: 'vt-departures',
   effect: 'read' as const,
-  description: 'Show the next departures from Västtrafik stops, at the time Västtrafik now expects each, refreshed at most every 20 seconds',
+  description:
+    'Show the next departures from Västtrafik stops, at the time Västtrafik now expects each, asked of Västtrafik anew once the copy is as old as its setting says, 20 seconds unless set',
   args: [{ name: 'stop', type: 'string' as const, description: 'stop areas by gid, as vt-stops lists them' }],
   flags: [
     { name: 'line', type: 'string' as const, description: 'only this line, by what its signs say (6, X5); repeat it or put commas between for several' },

@@ -22,7 +22,8 @@ const vtPositions = async (cmd: Command): CmdReturn => {
 vtPositions.spec = {
   name: 'vt-positions',
   effect: 'read' as const,
-  description: "Show where Västtrafik's vehicles are now, around stops or in a box, refreshed at most every 5 seconds",
+  description:
+    "Show where Västtrafik's vehicles are now, around stops or in a box, asked of Västtrafik anew once the copy is as old as its setting says, 5 seconds unless set",
   args: [],
   flags: AREA_FLAGS,
   examples: [

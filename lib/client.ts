@@ -3,22 +3,39 @@
  * answer kept for a while in this process, so that every screen showing one stop costs one call.
  *
  * Nothing is asked until a command wants it, and an answer is kept for as long as it stays true
- * enough: the stop areas a day, a stop's lines six hours, the region's disruptions five minutes,
- * departures 20 s, vehicle positions 5 s, which move every two or three, and the path a line runs in
- * one direction a day, counted from when Västtrafik was asked. Commands asking for the same thing
- * while it is being fetched wait for that one call. Departures and positions say how long their
- * answer stays fresh, so that a card asks again just as it is due. A refresh that fails gives the
- * answer it was to replace while that is not much older than it should be, since the positions call
- * fails or takes ten seconds now and then. Where each vehicle was is kept ten minutes, a point every
- * half minute, from the positions asked for meanwhile.
+ * enough: the stop areas a day, a stop's lines six hours, the path a line runs in one direction a
+ * day, and the region's disruptions, a stop's departures and the vehicles' positions as long as
+ * their settings say, counted from when Västtrafik was asked. Commands asking for the same thing
+ * while it is being fetched wait for that one call. Departures, positions and disruptions say how
+ * long their answer stays fresh, so that a card asks again just as it is due. A refresh that fails
+ * gives the answer it was to replace while that is not much older than it should be, since the
+ * positions call fails or takes ten seconds now and then. Where each vehicle was is kept ten
+ * minutes, a point every half minute, from the positions asked for meanwhile.
  *
- *   CFG_VASTTRAFIK_URL  the API's address, https://ext-api.vasttrafik.se
- *   CFG_VASTTRAFIK_KEY  the application's authentication key from developer.vasttrafik.se: its
- *                       key and secret as base64, or `key:secret`; a secret, sent only to the
- *                       system's own address
+ *   CFG_VASTTRAFIK_URL                  the API's address, https://ext-api.vasttrafik.se
+ *   CFG_VASTTRAFIK_KEY                  the application's authentication key from
+ *                                       developer.vasttrafik.se: its key and secret as base64, or
+ *                                       `key:secret`; a secret, sent only to the system's own address
+ *   CFG_VASTTRAFIK_DEPARTURES_SECONDS   how long a stop's departures are kept, 20 unless set
+ *   CFG_VASTTRAFIK_POSITIONS_SECONDS    how long the vehicles in a box are kept, 5 unless set
+ *   CFG_VASTTRAFIK_DISRUPTIONS_SECONDS  how long the region's disruptions are kept, 300 unless set
  */
 import { collectUnknownFlags, type Command, parseArgs, reportUnknownFlags, serviceKey } from '@ein/client';
-import type { VtDeparture, VtDepartures, VtDisruption, VtDisruptions, VtLine, VtLines, VtPositions, VtStop, VtTrack, VtTracks, VtVehicle } from '@vasttrafik/api';
+import type { HealthCheck } from '@ein/api';
+import {
+  VT_PERIODS,
+  type VtDeparture,
+  type VtDepartures,
+  type VtDisruption,
+  type VtDisruptions,
+  type VtLine,
+  type VtLines,
+  type VtPositions,
+  type VtStop,
+  type VtTrack,
+  type VtTracks,
+  type VtVehicle,
+} from '@vasttrafik/api';
 
 const DEFAULT_URL = 'https://ext-api.vasttrafik.se';
 
@@ -30,10 +47,18 @@ const HOUR = 60 * MINUTE;
 const KEEP = {
   stops: { fresh: 24 * HOUR, stale: 7 * 24 * HOUR },
   lines: { fresh: 6 * HOUR, stale: 24 * HOUR },
-  disruptions: { fresh: 5 * MINUTE, stale: 30 * MINUTE },
-  departures: { fresh: 20 * SECOND, stale: 2 * MINUTE },
-  positions: { fresh: 5 * SECOND, stale: 30 * SECOND },
   paths: { fresh: 24 * HOUR, stale: 7 * 24 * HOUR },
+};
+
+/** A refresh that fails gives the answer it was to replace while it is not older than this many periods. */
+const STALE_PERIODS = 6;
+
+/** How long `cmd`'s settings keep a `kind` of answer, held within what the setting takes. */
+const keepOf = (cmd: Ctx, kind: keyof typeof VT_PERIODS): { fresh: number; stale: number } => {
+  const period = VT_PERIODS[kind];
+  const set = Number(cmd.env[period.key] || period.default);
+  const fresh = (Number.isFinite(set) ? Math.min(Math.max(set, period.min), period.max) : period.default) * SECOND;
+  return { fresh, stale: STALE_PERIODS * fresh };
 };
 
 /** How long one call may take; a positions call takes ten seconds now and then. */
@@ -113,7 +138,10 @@ const token = async (base: string, key: string, renew = false): Promise<string> 
     const lifetime = typeof body.expires_in === 'number' ? body.expires_in * SECOND : HOUR;
     return { token: body.access_token as string, until: Date.now() + lifetime - MINUTE };
   })();
-  tokens.set(id, { token: held?.token ?? '', until: 0, pending: pending.then((t) => t.token) });
+  const shared = pending.then((t) => t.token);
+  // Those waiting on it see the failure; with none waiting it must not go unhandled.
+  shared.catch(() => {});
+  tokens.set(id, { token: held?.token ?? '', until: 0, pending: shared });
   try {
     const got = await pending;
     tokens.set(id, got);
@@ -131,7 +159,7 @@ const apiOf = (path: string): string => path.startsWith('/geo/') ? 'Geografi v3'
 const get = async <T>(cmd: Ctx, path: string, query: [string, string | number][] = []): Promise<T> => {
   const base = vtBase(cmd);
   const key = await serviceKey(cmd, 'CFG_VASTTRAFIK_KEY', 'CFG_VASTTRAFIK_URL');
-  if (!key) throw new VtError('no Västtrafik key: an administrator sets CFG_VASTTRAFIK_KEY on Settings → System');
+  if (!key) throw new VtError('no Västtrafik key: an administrator sets CFG_VASTTRAFIK_KEY on Settings → System → Västtrafik');
   const search = new URLSearchParams(query.map(([name, value]) => [name, String(value)]));
   const url = `${base}${path}${query.length ? `?${search}` : ''}`;
   for (let attempt = 0;; attempt++) {
@@ -299,7 +327,8 @@ export const departures = async (
   const stop = await stopOf(cmd, gid);
   const n = bucket(opts.limit);
   const perLine = (opts.lines?.length ?? 0) > 0 || (opts.platforms?.length ?? 0) > 0;
-  const fetched = await cached(`${vtBase(cmd)} departures ${gid} ${perLine ? 'each' : 'all'} ${n}`, KEEP.departures, async () => {
+  const keep = keepOf(cmd, 'departures');
+  const fetched = await cached(`${vtBase(cmd)} departures ${gid} ${perLine ? 'each' : 'all'} ${n}`, keep, async () => {
     const at = new Date().toISOString();
     const answer = await get<{ results: PrDeparture[] }>(
       cmd,
@@ -316,7 +345,7 @@ export const departures = async (
     stop: { gid: stop.gid, name: stop.label },
     departures: fetched.departures.filter(wanted).sort((a, b) => leaves(a) - leaves(b)).slice(0, opts.limit),
     at: fetched.at,
-    freshMs: freshFor(fetched.at, KEEP.departures),
+    freshMs: freshFor(fetched.at, keep),
   };
 };
 
@@ -423,7 +452,8 @@ const POSITIONS_LIMIT = 200;
 export const positions = async (cmd: Ctx, box: Box, only: string[] = []): Promise<Omit<VtPositions, 'stops'>> => {
   const wanted = [...new Set(only)].sort(byDesignation);
   const key = `${vtBase(cmd)} positions ${box.south} ${box.west} ${box.north} ${box.east} ${wanted.join(',')}`;
-  const fetched = await cached(key, KEEP.positions, async () => {
+  const keep = keepOf(cmd, 'positions');
+  const fetched = await cached(key, keep, async () => {
     const now = Date.now();
     const answer = await get<PrVehicle[]>(cmd, '/pr/v4/positions', [
       ['lowerLeftLat', box.south],
@@ -446,7 +476,7 @@ export const positions = async (cmd: Ctx, box: Box, only: string[] = []): Promis
     );
     return { box, vehicles, at: new Date(now).toISOString() };
   });
-  return { ...fetched, freshMs: freshFor(fetched.at, KEEP.positions) };
+  return { ...fetched, freshMs: freshFor(fetched.at, keep), periodMs: keep.fresh };
 };
 
 /** A journey's details as Planera Resa answers them with its coordinates. */
@@ -595,7 +625,8 @@ export const disruptions = async (
   cmd: Ctx,
   opts: { stops?: string[]; lines?: string[]; aheadHours?: number },
 ): Promise<VtDisruptions> => {
-  const fetched = await cached(`${vtBase(cmd)} disruptions`, KEEP.disruptions, async () => {
+  const keep = keepOf(cmd, 'disruptions');
+  const fetched = await cached(`${vtBase(cmd)} disruptions`, keep, async () => {
     const answer = await get<TsSituation[]>(cmd, '/ts/v1/traffic-situations');
     return { at: new Date().toISOString(), disruptions: (Array.isArray(answer) ? answer : []).map(disruptionOf) };
   });
@@ -611,16 +642,56 @@ export const disruptions = async (
   return {
     disruptions: fetched.disruptions.filter(wanted).sort((a, b) => (SEVERITY[a.severity] ?? 1) - (SEVERITY[b.severity] ?? 1) || Date.parse(a.start) - Date.parse(b.start)),
     at: fetched.at,
+    freshMs: freshFor(fetched.at, keep),
   };
 };
 
-/** A command's failure, said on stderr: a VtError as it is, anything else with what it was. */
+/** What went wrong, to say: a VtError as it is, anything else with what it was. */
+const messageOf = (error: unknown): string =>
+  error instanceof VtError ? error.message : error instanceof Error ? `${error.name === 'TimeoutError' ? 'Västtrafik did not answer in time' : error.message}` : String(error);
+
+/** A command's failure, said on stderr. */
 export const fail = async (cmd: Command, name: string, error: unknown): Promise<number> => {
-  const message = error instanceof VtError
-    ? error.message
-    : error instanceof Error
-    ? `${error.name === 'TimeoutError' ? 'Västtrafik did not answer in time' : error.message}`
-    : String(error);
-  await cmd.writeError(`${name}: ${message}\n`);
+  await cmd.writeError(`${name}: ${messageOf(error)}\n`);
   return 1;
+};
+
+/** `a message` as `A message.`, a check's reason. */
+const sentence = (text: string): string => `${text[0].toUpperCase()}${text.slice(1)}${/[.!?]$/.test(text) ? '' : '.'}`;
+
+/** Each API the commands use, what it gives them, and a call to it that costs Västtrafik little. */
+const APIS: { name: string; gives: string; path: string; query: [string, string | number][] }[] = [
+  {
+    name: 'Planera Resa v4',
+    gives: 'departures, vehicles and their tracks',
+    path: '/pr/v4/positions',
+    query: [['lowerLeftLat', 57.705], ['lowerLeftLong', 11.965], ['upperRightLat', 57.708], ['upperRightLong', 11.972], ['limit', 1]],
+  },
+  { name: 'Geografi v3', gives: 'the stops', path: '/geo/v3/StopAreas', query: [['offset', 0], ['limit', 1]] },
+  { name: 'Störning v1', gives: 'disruptions', path: '/ts/v1/traffic-situations', query: [] },
+];
+
+/**
+ * Whether Västtrafik takes the key and answers each API the commands use, each asked anew rather
+ * than from what is kept: first that a key is set and buys a token, then one call to each API.
+ */
+export const status = async (cmd: Ctx): Promise<HealthCheck[]> => {
+  const base = vtBase(cmd);
+  const key = await serviceKey(cmd, 'CFG_VASTTRAFIK_KEY', 'CFG_VASTTRAFIK_URL');
+  if (!key) return [{ name: 'key', state: 'fail', reason: 'No key is set, so the Västtrafik cards and commands have nothing to show.' }];
+  try {
+    await token(base, key);
+  } catch (error) {
+    return [{ name: 'key', state: 'fail', reason: sentence(messageOf(error)) }];
+  }
+  const asked = await Promise.allSettled(APIS.map((api) => get(cmd, api.path, api.query)));
+  return [
+    { name: 'key', state: 'ok', reason: `Västtrafik at ${new URL(base).host} takes the key.` },
+    ...APIS.map((api, n): HealthCheck => {
+      const answer = asked[n];
+      return answer.status === 'fulfilled'
+        ? { name: api.name, state: 'ok', reason: `${api.name} answers: ${api.gives}.` }
+        : { name: api.name, state: 'fail', reason: sentence(messageOf(answer.reason)) };
+    }),
+  ];
 };

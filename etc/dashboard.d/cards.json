@@ -40,7 +40,7 @@
   {
     "name": "map",
     "label": "Vehicles on the map",
-    "description": "The trams, buses and boats around one or more stops, where they are now, on their lines' tracks.",
+    "description": "The trams, buses and boats around one or more stops, where they are now, each with a short trail behind it.",
     "icon": "map-2",
     "color": "blue",
     "route": "/cards/vasttrafik/map",
@@ -72,7 +72,12 @@
           "minimum": 100,
           "maximum": 5000
         },
-        "tracks": { "type": "boolean", "title": "The lines' tracks", "description": "Where each line runs, under its vehicles.", "default": true }
+        "tracks": {
+          "type": "boolean",
+          "title": "Trails",
+          "description": "Behind each vehicle where it drove in the last minute, and ahead of it, dimmed, where it goes next.",
+          "default": true
+        }
       }
     }
   },

@@ -3,16 +3,18 @@
  * one did when probed (ein/core#1299, ein/core#1482): without a key they say so; with one, a token
  * is bought once and the stops, lines, departures, positions and the paths of the vehicles' journeys
  * come from the API, each kept so that asking again soon costs no call, the departures and positions
- * saying how long they stay fresh; a token Västtrafik stops taking is renewed, and an API the
- * application does not subscribe to is named.
+ * saying how long they stay fresh, as long as their settings say; a token Västtrafik stops taking is
+ * renewed, and an API the application does not subscribe to is named, by the command that needs it
+ * and by vt-status, which checks the key and each API.
  */
 
 import { assert, assertEquals, assertMatch } from '@std/assert';
 import { createTestContext } from '@ein/testing';
+import type { HealthCheck } from '@ein/api';
 import type { VtDepartures, VtDisruptions, VtLines, VtPositions, VtStop, VtTracks } from '../lib/api.ts';
 import { boxAround, clip } from '../lib/client.ts';
-import { darkerColour } from '../ui/components/look.ts';
-import { trails } from '../ui/components/trails.ts';
+import { darkerColour, shortName } from '../ui/components/look.ts';
+import { type Courses, frame, measure, steer } from '../ui/components/trails.ts';
 
 const KEY = btoa('app-id:app-secret');
 const BRUNNSPARKEN = '9021014001760000';
@@ -211,21 +213,56 @@ Deno.test('a path is clipped to the stretches that cross the box, each with the 
   assertEquals(clip([[20, 20], [30, 30]], box), []);
 });
 
-Deno.test('a trail runs back along the track as far as the vehicle went in ten minutes, and stops at the next vehicle behind it', () => {
-  const tram = { designation: '6', name: '6', background: '#fda00a', foreground: '#ffffff', mode: 'tram' };
-  const track = { line: tram, direction: 'Kortedala', paths: [[[57.7, 11.9], [57.7, 11.99]] as [number, number][]] };
-  const at = (ref: string, lng: number, trail: [number, number, number][] = [], lat = 57.7) => ({ ref, line: tram, direction: 'Kortedala', lat, lng, trail });
-  const pieces = trails([
-    at('ahead', 11.95, [[57.7001, 11.92, 360], [57.7, 11.93, 240], [57.6999, 11.94, 120]]),
-    at('behind', 11.925),
-    at('elsewhere', 11.95, [[57.71, 11.94, 60]], 57.71),
-  ], [track]);
-  const ends = (points: [number, number][]) => [points[0][1], points.at(-1)![1]].map((lng) => Math.round(lng * 1000) / 1000);
-  assertEquals(pieces.map((piece) => [piece.id, piece.age, ends(piece.points)]), [
-    ['ahead 0', 60, [11.94, 11.95]],
-    ['ahead 1', 180, [11.93, 11.94]],
-    ['ahead 2', 300, [11.925, 11.93]],
+Deno.test('a stop’s name on the map is whole when it fits, else its first words or its start', () => {
+  assertEquals(['Brunnsparken', 'Sahlgrenska Huvudentré', 'Bergsjön-Rymdtorget', 'Centralstationen'].map(shortName), [
+    'Brunnsparken',
+    'Sahlgrenska…',
+    'Bergsjön…',
+    'Centralstat…',
   ]);
+});
+
+const tram = { designation: '6', name: '6', background: '#fda00a', foreground: '#ffffff', mode: 'tram' };
+// Along latitude 57.7, where 0.001° of longitude is 60 metres.
+const stretches = measure([{ line: tram, direction: 'Kortedala', paths: [[[57.7, 11.9], [57.7, 11.99]]] }]);
+const tramAt = (ref: string, lng: number, trail: [number, number, number][] = [], lat = 57.7) => ({ ref, line: tram, direction: 'Kortedala', lat, lng, trail });
+const round = (value: number) => Math.round(value * 10_000) / 10_000;
+/** The positions' period the vehicles are steered by: answers five seconds apart. */
+const PERIOD_MS = 5_000;
+
+Deno.test('behind a vehicle on its track runs where it was a minute ago, and ahead of it the next 200 metres', () => {
+  const courses: Courses = new Map();
+  steer(courses, [tramAt('tram', 11.95, [[57.7001, 11.92, 360], [57.7, 11.93, 120], [57.6999, 11.94, 60]]), tramAt('elsewhere', 11.95, [], 57.71)], stretches, 0, PERIOD_MS);
+  const { vehicles, pieces } = frame(courses, stretches, 0);
+  assertEquals(vehicles.map((vehicle) => vehicle.lng), [11.95, 11.95]);
+  assertEquals(pieces.map((piece) => [piece.id, piece.ahead, piece.points[0][1], piece.points.at(-1)![1]].map((each) => typeof each === 'number' ? round(each) : each)), [
+    ['tram ahead', true, 11.95, 11.9534],
+    ['tram behind', false, 11.94, 11.95],
+  ]);
+});
+
+Deno.test('a vehicle drives along its track to where each answer puts it, and one answered back waits until it is answered past where it was going', () => {
+  const courses: Courses = new Map();
+  const at = (now: number) => frame(courses, stretches, now).vehicles.map((vehicle) => round(vehicle.lng));
+  steer(courses, [tramAt('tram', 11.95)], stretches, 0, PERIOD_MS);
+  steer(courses, [tramAt('tram', 11.951)], stretches, 6_000, PERIOD_MS);
+  assertEquals(at(9_000), [11.9505]);
+  steer(courses, [tramAt('tram', 11.949)], stretches, 12_000, PERIOD_MS);
+  assertEquals(at(15_000), [11.951]);
+  steer(courses, [tramAt('tram', 11.952)], stretches, 18_000, PERIOD_MS);
+  assertEquals(at(21_000), [11.9515]);
+  // 600 metres back is too far to be Västtrafik's own guess: it is put there.
+  steer(courses, [tramAt('tram', 11.942)], stretches, 24_000, PERIOD_MS);
+  assertEquals(at(24_000), [11.942]);
+  steer(courses, [], stretches, 30_000, PERIOD_MS);
+  assertEquals(courses.size, 0);
+});
+
+Deno.test('a vehicle off its track drives straight to where it is answered', () => {
+  const courses: Courses = new Map();
+  steer(courses, [tramAt('bus', 11.95, [], 57.71)], stretches, 0, PERIOD_MS);
+  steer(courses, [tramAt('bus', 11.96, [], 57.71)], stretches, 6_000, PERIOD_MS);
+  assertEquals(frame(courses, stretches, 9_000), { vehicles: [{ ...tramAt('bus', 11.955, [], 57.71) }], pieces: [] });
 });
 
 Deno.test({ name: 'the Västtrafik commands ask the API once for what they keep', sanitizeResources: false, sanitizeOps: false }, async (t) => {
@@ -239,7 +276,17 @@ Deno.test({ name: 'the Västtrafik commands ask the API once for what they keep'
       const result = await admin.exec('vt-stops');
       assertEquals(result.success, false);
       assertMatch(result.error ?? '', /no Västtrafik key: an administrator sets CFG_VASTTRAFIK_KEY/);
+      assertEquals(await admin.execJson<HealthCheck[]>('vt-status'), [
+        { name: 'key', state: 'fail', reason: 'No key is set, so the Västtrafik cards and commands have nothing to show.' },
+      ]);
       assertEquals(api.tokens(), 0);
+    });
+
+    await t.step('a key Västtrafik refuses is said so', async () => {
+      await admin.execString(`config set CFG_VASTTRAFIK_KEY ${btoa('app-id:wrong')}`);
+      assertEquals(await admin.execJson<HealthCheck[]>('vt-status'), [
+        { name: 'key', state: 'fail', reason: 'Västtrafik refuses the key: check CFG_VASTTRAFIK_KEY.' },
+      ]);
     });
 
     await admin.execString(`config set CFG_VASTTRAFIK_KEY ${KEY}`);
@@ -297,6 +344,7 @@ Deno.test({ name: 'the Västtrafik commands ask the API once for what they keep'
       assertEquals(found.vehicles.map((each) => [each.ref, each.line.designation, each.direction, each.lat]), [['journey-60', '60', 'Redbergsplatsen', 57.7101]]);
       assertEquals(found.stops.map((stop) => stop.gid), [BRUNNSPARKEN]);
       assert(found.freshMs > 0 && found.freshMs <= 5_000, `fresh for ${found.freshMs} ms`);
+      assertEquals(found.periodMs, 5_000);
       assert(api.asked.some((path) => path.startsWith('/pr/v4/positions?lowerLeftLat=57.7024&lowerLeftLong=11.9594') && path.endsWith('lineDesignations=60')));
       assertEquals((await admin.exec('vt-positions')).success, false);
     });
@@ -355,6 +403,24 @@ Deno.test({ name: 'the Västtrafik commands ask the API once for what they keep'
       const text = await admin.execString(`vt-disruptions --stop ${BRUNNSPARKEN}`, { json: false });
       assertMatch(text, /^slight {2}2026-11-01 00:00 – 2099-12-31 23:59\n {2}Brunnsparken läge C är flyttad\n {2}Orsaken är vägarbete\./);
       assertEquals((await admin.exec('vt-disruptions --stop brunnsparken')).success, false);
+      assert(at.freshMs > 4 * 60_000 && at.freshMs <= 5 * 60_000, `fresh for ${at.freshMs} ms`);
+    });
+
+    await t.step('an answer is kept as long as its setting says, held within what the setting takes', async () => {
+      await admin.execString('config set CFG_VASTTRAFIK_DEPARTURES_SECONDS 60 && config set CFG_VASTTRAFIK_POSITIONS_SECONDS 1');
+      const [board] = await admin.execJson<VtDepartures[]>(`vt-departures ${BRUNNSPARKEN} --limit 20`);
+      assert(board.freshMs > 50_000 && board.freshMs <= 60_000, `fresh for ${board.freshMs} ms`);
+      const found = await admin.execJson<VtPositions>(`vt-positions --around ${KUNGALV}`);
+      assertEquals(found.periodMs, 2_000, 'two seconds at the least');
+      await admin.execString('config unset CFG_VASTTRAFIK_DEPARTURES_SECONDS && config unset CFG_VASTTRAFIK_POSITIONS_SECONDS');
+    });
+
+    await t.step('vt-status: the key is taken, and each API answers, asked anew', async () => {
+      const before = api.asked.length;
+      const checks = await admin.execJson<HealthCheck[]>('vt-status');
+      assertEquals(checks.map((check) => [check.name, check.state]), [['key', 'ok'], ['Planera Resa v4', 'ok'], ['Geografi v3', 'ok'], ['Störning v1', 'ok']]);
+      assertEquals(checks[2].reason, 'Geografi v3 answers: the stops.');
+      assertEquals(api.asked.slice(before).map((path) => path.split('?')[0]).sort(), ['/geo/v3/StopAreas', '/pr/v4/positions', '/ts/v1/traffic-situations']);
     });
 
     await t.step('a token no longer taken is renewed once', async () => {
@@ -379,6 +445,9 @@ Deno.test({ name: 'an API the application does not subscribe to is named', sanit
     const result = await admin.exec('vt-stops');
     assertEquals(result.success, false);
     assertMatch(result.error ?? '', /the Västtrafik application does not subscribe to Geografi v3/);
+    const checks = await admin.execJson<HealthCheck[]>('vt-status');
+    assertEquals(checks.map((check) => [check.name, check.state]), [['key', 'ok'], ['Planera Resa v4', 'ok'], ['Geografi v3', 'fail'], ['Störning v1', 'ok']]);
+    assertEquals(checks[2].reason, 'The Västtrafik application does not subscribe to Geografi v3.');
   } finally {
     await testCtx.teardown();
     await api.server.shutdown();

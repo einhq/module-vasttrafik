@@ -48,7 +48,7 @@ vtDisruptions.spec = {
   name: 'vt-disruptions',
   effect: 'read' as const,
   description:
-    "List Västtrafik's disruptions in effect at stops or on lines — moved platforms, diversions, lines not running — the worst first, from a copy refreshed at most every five minutes",
+    "List Västtrafik's disruptions in effect at stops or on lines — moved platforms, diversions, lines not running — the worst first, from a copy asked of Västtrafik anew once it is as old as its setting says, five minutes unless set",
   args: [],
   flags: [
     { name: 'stop', type: 'string' as const, description: 'those naming this stop area, by gid as vt-stops lists it; repeat it or put commas between for several' },
@@ -61,7 +61,7 @@ vtDisruptions.spec = {
   ],
   examples: ['vt-disruptions --stop 9021014001760000', 'vt-disruptions --line 6 --ahead 24', 'vt-disruptions'],
   returns:
-    'at, and disruptions that name any of the stops or lines given (every one when none is), the worst first: id, title, description, severity (slight, normal, severe), start, end, stops (gid, name) and lines (gid, designation, name, background, foreground, mode).',
+    'at, freshMs (the milliseconds before Västtrafik is asked anew), and disruptions that name any of the stops or lines given (every one when none is), the worst first: id, title, description, severity (slight, normal, severe), start, end, stops (gid, name) and lines (gid, designation, name, background, foreground, mode).',
 };
 
 export default vtDisruptions;

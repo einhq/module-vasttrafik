@@ -102,6 +102,8 @@ export type VtPositions = {
    * not answer and this is the last answer it gave.
    */
   freshMs: number;
+  /** How long an answer is kept, in milliseconds, as the setting says: about the time from one to the next. */
+  periodMs: number;
 };
 
 /** Where one line runs in one direction, as the journey of a vehicle on it runs. */
@@ -144,4 +146,16 @@ export type VtDisruptions = {
   disruptions: VtDisruption[];
   /** When Västtrafik was asked, ISO 8601. */
   at: string;
+  /** How long this answer stays fresh, in milliseconds, as `VtPositions`' does. */
+  freshMs: number;
 };
+
+/**
+ * The answers EiN keeps for as long as a setting says, in seconds, before it asks Västtrafik again:
+ * the setting, its default, and the least and most it takes; a value outside is taken as the nearer.
+ */
+export const VT_PERIODS = {
+  departures: { key: 'CFG_VASTTRAFIK_DEPARTURES_SECONDS', default: 20, min: 10, max: 600 },
+  positions: { key: 'CFG_VASTTRAFIK_POSITIONS_SECONDS', default: 5, min: 2, max: 300 },
+  disruptions: { key: 'CFG_VASTTRAFIK_DISRUPTIONS_SECONDS', default: 300, min: 60, max: 3600 },
+} as const;
