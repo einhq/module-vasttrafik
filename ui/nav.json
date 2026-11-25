@@ -10,5 +10,60 @@
       "admin": true,
       "order": 60
     }
+  ],
+  "layers": [
+    {
+      "id": "vasttrafik.vehicles",
+      "label": "Västtrafik's vehicles",
+      "icon": "bus",
+      "description": "The trams, buses and boats where they are now, each with a short trail.",
+      "route": "/map-layers/vasttrafik/vehicles",
+      "order": 50,
+      "params": {
+        "type": "object",
+        "properties": {
+          "stops": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Stops",
+            "description": "Drawn with their names; a map that fits its layers shows the area around them.",
+            "x-choices": {
+              "command": "vt-stops",
+              "value": "gid",
+              "label": "label"
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "description": "Only these; every line when none is chosen.",
+            "x-choices": {
+              "command": "vt-lines {stops}",
+              "items": "lines",
+              "value": "designation",
+              "label": "name"
+            }
+          },
+          "margin": {
+            "type": "integer",
+            "title": "Metres around the stops",
+            "default": 1000,
+            "minimum": 100,
+            "maximum": 5000
+          },
+          "trails": {
+            "type": "boolean",
+            "title": "Trails",
+            "description": "Behind each vehicle where it drove in the last minute, and ahead of it, dimmed, where it goes next.",
+            "default": true
+          }
+        }
+      }
+    }
   ]
 }

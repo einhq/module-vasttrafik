@@ -17,7 +17,7 @@ const PERIODS: { kind: Period; label: string; about: string }[] = [
   {
     kind: 'positions',
     label: 'Vehicles',
-    about: 'Where the vehicles in a map card are. They report every two or three seconds; between answers they drive on along their tracks.',
+    about: 'Where the vehicles on a map are. They report every two or three seconds; between answers they drive on along their tracks.',
   },
   { kind: 'disruptions', label: 'Disruptions', about: "The region's disruptions, one call for every card." },
 ];

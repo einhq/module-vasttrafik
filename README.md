@@ -1,6 +1,6 @@
 # module-vasttrafik
 
-Västtrafik's departures, vehicle positions and disruptions, as dashboard cards and commands.
+Västtrafik's departures, vehicle positions and disruptions, as dashboard cards, a map layer and commands.
 
 An [EiN](https://github.com/einhq) module. It is developed and tested inside a checkout of EiN core,
 as `modules/vasttrafik`, and a deployment chooses whether to run it. It needs an application of

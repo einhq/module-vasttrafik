@@ -38,50 +38,6 @@
     }
   },
   {
-    "name": "map",
-    "label": "Vehicles on the map",
-    "description": "The trams, buses and boats around one or more stops, where they are now, each with a short trail behind it.",
-    "icon": "map-2",
-    "color": "blue",
-    "route": "/cards/vasttrafik/map",
-    "frame": "plain",
-    "size": [6, 5],
-    "min": [3, 3],
-    "params": {
-      "type": "object",
-      "required": ["stops"],
-      "properties": {
-        "stops": {
-          "type": "array",
-          "items": { "type": "string" },
-          "title": "Stops",
-          "x-choices": { "command": "vt-stops", "value": "gid", "label": "label" }
-        },
-        "lines": {
-          "type": "array",
-          "items": { "type": "string" },
-          "title": "Lines",
-          "description": "Only these; every line when none is chosen.",
-          "x-choices": { "command": "vt-lines {stops}", "items": "lines", "value": "designation", "label": "name" }
-        },
-        "margin": {
-          "type": "integer",
-          "title": "Metres around the stops",
-          "description": "How much of the map the card shows; the vehicles and tracks are those of the whole card.",
-          "default": 1000,
-          "minimum": 100,
-          "maximum": 5000
-        },
-        "tracks": {
-          "type": "boolean",
-          "title": "Trails",
-          "description": "Behind each vehicle where it drove in the last minute, and ahead of it, dimmed, where it goes next.",
-          "default": true
-        }
-      }
-    }
-  },
-  {
     "name": "disruptions",
     "label": "Disruptions",
     "description": "What Västtrafik says disrupts some stops or lines now: moved platforms, diversions, lines not running.",

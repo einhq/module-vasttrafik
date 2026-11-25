@@ -1,9 +1,9 @@
 {
   "name": "vasttrafik",
-  "version": "0.1.1",
-  "description": "Västtrafik: when the next tram or bus leaves a stop, where the vehicles are now, and what disrupts them, as dashboard cards and commands",
+  "version": "0.2.0",
+  "description": "Västtrafik: when the next tram or bus leaves a stop, where the vehicles are now, and what disrupts them, as dashboard cards, a map layer and commands",
   "license": "MIT",
-  "coreApi": "^0.15.44",
+  "coreApi": "^0.15.59",
   "exports": {
     "./api": "./lib/api.ts"
   },
@@ -14,9 +14,9 @@
   "ui": {
     "routes": {
       "/cards/vasttrafik/departures": "ui/cards/departures.tsx",
-      "/cards/vasttrafik/map": "ui/cards/map.tsx",
       "/cards/vasttrafik/disruptions": "ui/cards/disruptions.tsx",
-      "/settings/vasttrafik": "ui/pages/settings.tsx"
+      "/settings/vasttrafik": "ui/pages/settings.tsx",
+      "/map-layers/vasttrafik/vehicles": "ui/map-layers/vehicles.tsx"
     }
   },
   "config": {
@@ -54,7 +54,7 @@
         "type": "number",
         "default": "5",
         "label": "Vehicles kept (seconds)",
-        "description": "How long EiN keeps where the vehicles in a map card's box are before it asks Västtrafik again, 2 to 300. Vehicles report where they are every two or three seconds; each map on a screen costs one call this often, and its vehicles drive smoothly between answers.",
+        "description": "How long EiN keeps where the vehicles on a map are before it asks Västtrafik again, 2 to 300. Vehicles report where they are every two or three seconds; each map showing them costs one call this often, and its vehicles drive smoothly between answers.",
         "group": "Västtrafik"
       },
       {
